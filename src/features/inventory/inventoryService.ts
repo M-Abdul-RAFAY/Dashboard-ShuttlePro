@@ -5,6 +5,9 @@ import type {
   InventoryLevel,
   FilterOptions,
   PaginatedResponse,
+  StockTransfer,
+  Location,
+  ProductVariant,
 } from "../../types";
 
 class InventoryService {
@@ -283,6 +286,512 @@ class InventoryService {
   }> {
     const params = locationId ? `?locationId=${locationId}` : "";
     return await apiService.get(`/inventory/valuation${params}`);
+  }
+
+  // Advanced Inventory Features
+  async barcodeSearch(barcode: string): Promise<ProductVariant | null> {
+    return await apiService.get<ProductVariant | null>(
+      `/inventory/barcode/${barcode}`
+    );
+  }
+
+  async createStockTransfer(transferData: {
+    fromLocationId: string;
+    toLocationId: string;
+    items: Array<{
+      productVariantId: string;
+      quantity: number;
+      reason?: string;
+    }>;
+    notes?: string;
+  }): Promise<StockTransfer> {
+    return await apiService.post<StockTransfer>(
+      "/inventory/transfers",
+      transferData
+    );
+  }
+
+  async getStockTransfers(filters?: {
+    status?: string;
+    fromLocationId?: string;
+    toLocationId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<StockTransfer[]> {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) params.append(key, value);
+      });
+    }
+    return await apiService.get<StockTransfer[]>(
+      `/inventory/transfers?${params}`
+    );
+  }
+
+  async approveStockTransfer(transferId: string): Promise<StockTransfer> {
+    return await apiService.post<StockTransfer>(
+      `/inventory/transfers/${transferId}/approve`
+    );
+  }
+
+  async completeStockTransfer(
+    transferId: string,
+    items: Array<{
+      productVariantId: string;
+      transferredQuantity: number;
+    }>
+  ): Promise<StockTransfer> {
+    return await apiService.post<StockTransfer>(
+      `/inventory/transfers/${transferId}/complete`,
+      { items }
+    );
+  }
+
+  async getLocations(): Promise<Location[]> {
+    return await apiService.get<Location[]>("/inventory/locations");
+  }
+
+  async createLocation(locationData: Partial<Location>): Promise<Location> {
+    return await apiService.post<Location>(
+      "/inventory/locations",
+      locationData
+    );
+  }
+
+  async updateLocation(
+    id: string,
+    locationData: Partial<Location>
+  ): Promise<Location> {
+    return await apiService.put<Location>(
+      `/inventory/locations/${id}`,
+      locationData
+    );
+  }
+
+  async syncInventoryAcrossChannels(
+    locationId: string
+  ): Promise<{ success: boolean; message: string }> {
+    return await apiService.post(`/inventory/locations/${locationId}/sync`);
+  }
+
+  async reserveStock(
+    items: Array<{
+      productVariantId: string;
+      locationId: string;
+      quantity: number;
+      reservationReason: string;
+      expiresAt?: string;
+    }>
+  ): Promise<{ reservationId: string; success: boolean }> {
+    return await apiService.post("/inventory/reserve", { items });
+  }
+
+  async releaseReservation(
+    reservationId: string
+  ): Promise<{ success: boolean }> {
+    return await apiService.delete(`/inventory/reservations/${reservationId}`);
+  }
+
+  async getInventoryAlerts(locationId?: string): Promise<
+    Array<{
+      id: string;
+      type: "low_stock" | "out_of_stock" | "overstock" | "expired";
+      productVariant: ProductVariant;
+      location: Location;
+      currentLevel: number;
+      threshold: number;
+      severity: "low" | "medium" | "high" | "critical";
+      createdAt: string;
+    }>
+  > {
+    const params = locationId ? `?locationId=${locationId}` : "";
+    return await apiService.get(`/inventory/alerts${params}`);
+  }
+
+  async createReorderReport(locationId?: string): Promise<{
+    items: Array<{
+      productVariant: ProductVariant;
+      currentStock: number;
+      reorderPoint: number;
+      suggestedOrderQuantity: number;
+      leadTime: number;
+      averageDemand: number;
+    }>;
+    totalItems: number;
+    estimatedCost: number;
+  }> {
+    const params = locationId ? `?locationId=${locationId}` : "";
+    return await apiService.get(`/inventory/reorder-report${params}`);
+  }
+
+  async generatePurchaseOrder(
+    supplierId: string,
+    items: Array<{
+      productVariantId: string;
+      quantity: number;
+      unitCost: number;
+    }>
+  ): Promise<{ purchaseOrderId: string; totalCost: number }> {
+    return await apiService.post("/inventory/purchase-orders", {
+      supplierId,
+      items,
+    });
+  }
+
+  // Advanced Inventory Features for Ginkgo Retail
+
+  // Multi-channel Inventory Synchronization
+  async syncInventoryWithChannels(data: {
+    locationId: string;
+    channels: Array<{
+      channelType:
+        | "shopify"
+        | "woocommerce"
+        | "amazon"
+        | "ebay"
+        | "marketplace";
+      channelId: string;
+      syncRules: {
+        reserveBuffer: number;
+        maxQuantityToSync: number;
+        autoSync: boolean;
+      };
+    }>;
+  }): Promise<{
+    success: boolean;
+    syncedChannels: number;
+    errors: Array<{ channel: string; error: string }>;
+  }> {
+    return await apiService.post("/inventory/sync-channels", data);
+  }
+
+  // Inventory Buffer Management for Physical Store Customers
+  async setInventoryBuffer(data: {
+    productVariantId: string;
+    locationId: string;
+    bufferPercentage: number;
+    reason: string;
+  }): Promise<{ success: boolean; newAvailableQuantity: number }> {
+    return await apiService.post("/inventory/set-buffer", data);
+  }
+
+  // Real-time Inventory Tracking
+  async getRealtimeInventory(
+    productVariantId: string,
+    locationId?: string
+  ): Promise<{
+    productVariant: ProductVariant;
+    locations: Array<{
+      location: Location;
+      onHand: number;
+      reserved: number;
+      available: number;
+      incoming: number;
+      buffer: number;
+      lastUpdated: string;
+    }>;
+    totalAvailable: number;
+    totalReserved: number;
+  }> {
+    const params = locationId ? `?locationId=${locationId}` : "";
+    return await apiService.get(
+      `/inventory/realtime/${productVariantId}${params}`
+    );
+  }
+
+  // Advanced Barcode Scanning with Batch Processing
+  async batchBarcodeSearch(barcodes: string[]): Promise<
+    Array<{
+      barcode: string;
+      found: boolean;
+      productVariant?: ProductVariant;
+      inventoryLevels?: Array<{
+        location: Location;
+        quantity: number;
+        available: number;
+      }>;
+    }>
+  > {
+    return await apiService.post("/inventory/batch-barcode-search", {
+      barcodes,
+    });
+  }
+
+  // Automated Reorder Management
+  async getAutomatedReorderSuggestions(locationId?: string): Promise<{
+    urgentItems: Array<{
+      productVariant: ProductVariant;
+      currentStock: number;
+      reorderPoint: number;
+      suggestedQuantity: number;
+      leadTimeDays: number;
+      priority: "critical" | "high" | "medium";
+      supplier: { id: string; name: string };
+    }>;
+    totalEstimatedCost: number;
+    deliverySchedule: Array<{
+      supplierId: string;
+      supplierName: string;
+      itemCount: number;
+      estimatedDelivery: string;
+      totalCost: number;
+    }>;
+  }> {
+    const params = locationId ? `?locationId=${locationId}` : "";
+    return await apiService.get(`/inventory/auto-reorder-suggestions${params}`);
+  }
+
+  async executeAutomatedReorder(data: {
+    locationId: string;
+    items: Array<{
+      productVariantId: string;
+      quantity: number;
+      maxUnitCost: number;
+    }>;
+    autoApprove: boolean;
+  }): Promise<{
+    purchaseOrders: Array<{
+      id: string;
+      supplierId: string;
+      itemCount: number;
+      totalCost: number;
+      status: "pending" | "approved" | "sent";
+    }>;
+    totalCost: number;
+  }> {
+    return await apiService.post("/inventory/execute-auto-reorder", data);
+  }
+
+  // Multi-location Inventory Control
+  async transferInventoryBetweenLocations(data: {
+    fromLocationId: string;
+    toLocationId: string;
+    items: Array<{
+      productVariantId: string;
+      quantity: number;
+      reason: string;
+    }>;
+    urgency: "low" | "medium" | "high" | "urgent";
+    requestedBy: string;
+    notes?: string;
+  }): Promise<{
+    transferId: string;
+    estimatedTransitTime: number;
+    trackingNumber?: string;
+  }> {
+    return await apiService.post("/inventory/inter-location-transfer", data);
+  }
+
+  async getTransferStatus(transferId: string): Promise<{
+    transfer: StockTransfer;
+    timeline: Array<{
+      timestamp: string;
+      status: string;
+      location?: string;
+      notes?: string;
+      updatedBy: string;
+    }>;
+    estimatedDelivery?: string;
+  }> {
+    return await apiService.get(`/inventory/transfers/${transferId}/status`);
+  }
+
+  // Advanced Product Catalog Management
+  async bulkUpdateProductCatalog(data: {
+    updates: Array<{
+      productId: string;
+      variants?: Array<{
+        id?: string;
+        sku: string;
+        price: number;
+        cost: number;
+        attributes: Record<string, string>;
+      }>;
+      categories?: string[];
+      tags?: string[];
+      seoData?: {
+        title: string;
+        description: string;
+        keywords: string[];
+      };
+    }>;
+    publishToChannels?: string[];
+  }): Promise<{
+    processed: number;
+    successful: number;
+    failed: number;
+    errors: Array<{
+      productId: string;
+      error: string;
+    }>;
+  }> {
+    return await apiService.post("/inventory/bulk-catalog-update", data);
+  }
+
+  // Inventory Forecasting and Demand Planning
+  async getInventoryForecast(data: {
+    productVariantId: string;
+    locationId?: string;
+    forecastDays: number;
+    includeSeasonal: boolean;
+  }): Promise<{
+    productVariant: ProductVariant;
+    currentStock: number;
+    forecastData: Array<{
+      date: string;
+      predictedDemand: number;
+      suggestedStock: number;
+      confidence: number;
+    }>;
+    recommendations: {
+      reorderPoint: number;
+      maxStock: number;
+      safetyStock: number;
+    };
+  }> {
+    return await apiService.post("/inventory/forecast", data);
+  }
+
+  // Advanced Stock Alerts and Notifications
+  async configureStockAlerts(data: {
+    productVariantId: string;
+    locationId: string;
+    alertRules: {
+      lowStockThreshold: number;
+      criticalStockThreshold: number;
+      overstockThreshold: number;
+      expiryWarningDays?: number;
+    };
+    notifications: {
+      email: string[];
+      sms: string[];
+      slack?: string;
+      pushNotification: boolean;
+    };
+  }): Promise<{ success: boolean; alertId: string }> {
+    return await apiService.post("/inventory/configure-alerts", data);
+  }
+
+  async getStockAlertHistory(
+    alertId?: string,
+    locationId?: string
+  ): Promise<
+    Array<{
+      id: string;
+      alertType:
+        | "low_stock"
+        | "critical_stock"
+        | "overstock"
+        | "expiry_warning";
+      productVariant: ProductVariant;
+      location: Location;
+      triggeredAt: string;
+      resolvedAt?: string;
+      currentLevel: number;
+      threshold: number;
+      actionsTaken: Array<{
+        action: string;
+        timestamp: string;
+        userId: string;
+      }>;
+    }>
+  > {
+    const params = new URLSearchParams();
+    if (alertId) params.append("alertId", alertId);
+    if (locationId) params.append("locationId", locationId);
+    return await apiService.get(`/inventory/alert-history?${params}`);
+  }
+
+  // Inventory Audit and Compliance
+  async startInventoryAudit(data: {
+    locationId: string;
+    auditType: "full" | "cycle" | "spot_check";
+    productCategories?: string[];
+    auditedBy: string;
+    notes?: string;
+  }): Promise<{
+    auditId: string;
+    itemsToAudit: number;
+    estimatedDuration: number;
+  }> {
+    return await apiService.post("/inventory/start-audit", data);
+  }
+
+  async submitAuditCounts(
+    auditId: string,
+    counts: Array<{
+      productVariantId: string;
+      countedQuantity: number;
+      condition: "good" | "damaged" | "expired";
+      notes?: string;
+    }>
+  ): Promise<{
+    discrepancies: Array<{
+      productVariant: ProductVariant;
+      expectedQuantity: number;
+      countedQuantity: number;
+      variance: number;
+      suggestedAction: "adjust" | "recount" | "investigate";
+    }>;
+  }> {
+    return await apiService.post(`/inventory/audits/${auditId}/submit-counts`, {
+      counts,
+    });
+  }
+
+  async finalizeAudit(
+    auditId: string,
+    approvedAdjustments: Array<{
+      productVariantId: string;
+      adjustmentQuantity: number;
+      reason: string;
+    }>
+  ): Promise<{
+    success: boolean;
+    adjustmentsMade: number;
+    totalVariance: number;
+    auditReport: {
+      accuracy: number;
+      totalItemsAudited: number;
+      discrepanciesFound: number;
+    };
+  }> {
+    return await apiService.post(`/inventory/audits/${auditId}/finalize`, {
+      approvedAdjustments,
+    });
+  }
+
+  // Integration with External Systems
+  async syncWithERP(data: {
+    erpSystem: "sap" | "oracle" | "dynamics" | "netsuite" | "custom";
+    syncType: "full" | "incremental" | "products_only" | "inventory_only";
+    locationId?: string;
+  }): Promise<{
+    success: boolean;
+    recordsSynced: number;
+    errors: Array<{
+      recordId: string;
+      error: string;
+    }>;
+    syncDuration: number;
+  }> {
+    return await apiService.post("/inventory/erp-sync", data);
+  }
+
+  async exportInventoryForAccounting(data: {
+    locationId?: string;
+    dateFrom: string;
+    dateTo: string;
+    format: "csv" | "excel" | "json" | "xml";
+    includeMovements: boolean;
+    includeValuation: boolean;
+  }): Promise<{
+    downloadUrl: string;
+    recordCount: number;
+    totalValue: number;
+  }> {
+    return await apiService.post("/inventory/export-accounting", data);
   }
 }
 
