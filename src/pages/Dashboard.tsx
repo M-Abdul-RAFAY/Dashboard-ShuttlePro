@@ -113,9 +113,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
 
 const Dashboard: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { dashboardMetrics, loading } = useAppSelector(
-    (state) => state.analytics
-  );
+  const { loading } = useAppSelector((state) => state.analytics);
   const user = useAppSelector((state) => state.auth.user);
 
   useEffect(() => {
