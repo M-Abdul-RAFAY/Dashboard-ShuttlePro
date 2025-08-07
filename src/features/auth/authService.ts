@@ -1,5 +1,5 @@
 import apiService from "../../services/api";
-import { User } from "../../types";
+import type { User } from "../../types";
 
 interface LoginCredentials {
   email: string;
